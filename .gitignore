@@ -38,4 +38,6 @@ Thumbs.db
 # Project specific
 *.log
 debug_output.log
-run_debug.sh 
+run_debug.sh
+high_scores.json
+Pokemon Quiz.spec 

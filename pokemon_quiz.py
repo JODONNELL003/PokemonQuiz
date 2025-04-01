@@ -14,11 +14,15 @@ def resource_path(relative_path):
     try:
         # PyInstaller creates a temp folder and stores path in _MEIPASS
         base_path = sys._MEIPASS
+        print(f"Running in PyInstaller bundle. Base path: {base_path}")
     except Exception:
         # Not running in a PyInstaller bundle, use current directory
         base_path = os.path.abspath(".")
+        print(f"Running in development mode. Base path: {base_path}")
 
-    return os.path.join(base_path, relative_path)
+    full_path = os.path.join(base_path, relative_path)
+    print(f"Resource path for '{relative_path}': {full_path}")
+    return full_path
 
 # Initialize pygame
 pygame.init()
@@ -38,8 +42,33 @@ PINK = (255, 192, 203)
 DARK_PINK = (255, 150, 180)
 GOLD = (255, 215, 0)
 TIMER_DURATION = 60  # 60 seconds
-HIGH_SCORE_FILE = resource_path("high_scores.json")
 POKEMON_NAMES_FILE = resource_path("pokemon_names.csv")
+
+# Get a writable location for high scores
+def get_highscore_path():
+    """Get a writable path for high scores that persists across app launches"""
+    try:
+        # For Mac/Linux
+        if os.name == 'posix':
+            home = os.path.expanduser("~")
+            app_data_dir = os.path.join(home, ".pokemonquiz")
+        # For Windows
+        else:
+            app_data_dir = os.path.join(os.getenv('APPDATA'), "PokemonQuiz")
+            
+        # Create the directory if it doesn't exist
+        if not os.path.exists(app_data_dir):
+            os.makedirs(app_data_dir)
+            
+        scores_path = os.path.join(app_data_dir, "high_scores.json")
+        print(f"High scores will be saved to: {scores_path}")
+        return scores_path
+    except Exception as e:
+        print(f"Error creating high scores directory: {e}")
+        # Fallback to current directory
+        return "high_scores.json"
+
+HIGH_SCORE_FILE = get_highscore_path()
 
 # Set up the display (windowed)
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -134,17 +163,43 @@ class HighScoreManager:
                 with open(self.file_path, 'r') as f:
                     return json.load(f)
             else:
-                return {"top_score": 0, "recent_scores": []}
+                # Initial empty high scores object
+                initial_scores = {"top_score": 0, "recent_scores": []}
+                # Save it immediately to create the file
+                try:
+                    with open(self.file_path, 'w') as f:
+                        json.dump(initial_scores, f)
+                    print(f"Created new high scores file at {self.file_path}")
+                except Exception as e:
+                    print(f"Failed to create high scores file: {e}")
+                return initial_scores
         except Exception as e:
             print(f"Error loading high scores: {e}")
             return {"top_score": 0, "recent_scores": []}
             
     def save_high_scores(self):
         try:
+            # Create parent directory if it doesn't exist
+            parent_dir = os.path.dirname(self.file_path)
+            if parent_dir and not os.path.exists(parent_dir):
+                os.makedirs(parent_dir)
+                print(f"Created directory: {parent_dir}")
+            
             with open(self.file_path, 'w') as f:
                 json.dump(self.high_scores, f)
+                
+            print(f"Saved high scores to {self.file_path}")
+            
+            # Ensure file is readable/writable by the user
+            try:
+                if os.name == 'posix':  # Unix/Mac
+                    os.chmod(self.file_path, 0o644)
+            except Exception as e:
+                print(f"Warning: Could not set file permissions: {e}")
+                
         except Exception as e:
             print(f"Error saving high scores: {e}")
+            print(f"Attempted to save to: {self.file_path}")
             
     def add_score(self, score, date=None):
         if date is None:
@@ -174,6 +229,8 @@ def load_pokemon_names():
     """Load Pokemon names from CSV file"""
     pokemon_dict = {}
     
+    print(f"Attempting to load Pokemon names from: {POKEMON_NAMES_FILE}")
+    
     # Try to load from CSV file
     if os.path.exists(POKEMON_NAMES_FILE):
         try:
@@ -181,14 +238,15 @@ def load_pokemon_names():
                 reader = csv.reader(f)
                 for row in reader:
                     if len(row) >= 2:
-                        # Assuming CSV format: id,name
-                        # Remove leading zeros from dex number (e.g., "001" -> "1")
-                        pokemon_id = row[0].lstrip('0')
-                        if pokemon_id == '':  # Handle case where id is all zeros
-                            pokemon_id = '0'
+                        # Keep the original ID with leading zeros
+                        pokemon_id = row[0]
                         pokemon_name = row[1].strip()
                         pokemon_dict[pokemon_id] = pokemon_name
+                        
             print(f"Loaded {len(pokemon_dict)} Pokemon names from CSV")
+            # Print first 5 entries as sample
+            sample_entries = list(pokemon_dict.items())[:5]
+            print(f"Sample entries: {sample_entries}")
         except Exception as e:
             print(f"Error loading Pokemon names from CSV: {e}")
     else:
@@ -277,7 +335,11 @@ class PokemonQuizGame:
         self.first_interaction_done = False
         self.state = "start"
         self.scroll_y = 0
-        self.pokemon_images = []  # Clear loaded images
+        
+        # Only reload images if they were cleared
+        if not self.pokemon_images:
+            self.load_pokemon_images()
+            
         self.fade_alpha = 0
         self.fade_in = True
         self.pokemon_scale = 0.9
@@ -286,6 +348,7 @@ class PokemonQuizGame:
     def load_pokemon_images(self):
         """Load all Pokemon images from the img directory"""
         image_dir = resource_path("img")
+        print(f"Attempting to load images from: {image_dir}")
         
         if not os.path.exists(image_dir):
             print(f"Error: '{image_dir}' directory not found. Please create it and add Pokemon images.")
@@ -295,6 +358,7 @@ class PokemonQuizGame:
             if filename.endswith(('.png', '.jpg', '.jpeg')):
                 try:
                     image_path = os.path.join(image_dir, filename)
+                    print(f"Loading image: {image_path}")
                     original_image = pygame.image.load(image_path)
                     
                     # Scale image to fit the screen while maintaining aspect ratio
@@ -302,7 +366,13 @@ class PokemonQuizGame:
                     
                     # Extract pokemon ID and name info
                     pokemon_id = self.get_pokemon_id_from_filename(filename)
-                    pokemon_name = self.get_pokemon_name(pokemon_id)
+                    
+                    # Get the name directly from the dictionary
+                    pokemon_name = "Unknown"
+                    if pokemon_id in self.pokemon_names:
+                        pokemon_name = self.pokemon_names[pokemon_id]
+                    else:
+                        print(f"WARNING: No name found for ID {pokemon_id}")
                     
                     # Store in our list (ID, name, image)
                     self.pokemon_images.append((pokemon_id, pokemon_name, scaled_image))
@@ -311,7 +381,11 @@ class PokemonQuizGame:
                     print(f"Could not load image {filename}: {e}")
         
         print(f"Loaded {len(self.pokemon_images)} Pokemon images")
-    
+        # Print first few entries as sample
+        for i in range(min(5, len(self.pokemon_images))):
+            pid, name, _ = self.pokemon_images[i]
+            print(f"Loaded Pokemon {i+1}: ID={pid}, name={name}")
+
     def get_pokemon_id_from_filename(self, filename):
         """Extract Pokemon ID from filename"""
         parts = filename.split('.')
@@ -319,22 +393,34 @@ class PokemonQuizGame:
         
         # Handle different filename formats (001.png or 001_Name.png)
         if '_' in base:
-            return base.split('_')[0]
-        return base
+            id_part = base.split('_')[0]
+        else:
+            id_part = base
+            
+        # Ensure ID is consistently formatted (with leading zeros)
+        formatted_id = id_part.zfill(3)
+        print(f"Extracted ID '{formatted_id}' from filename '{filename}'")
+        return formatted_id
     
     def get_pokemon_name(self, pokemon_id):
         """Get Pokemon name from ID, with nice formatting"""
-        # Convert to string and strip leading zeros (e.g., "001" -> "1")
-        pokemon_num = str(pokemon_id).lstrip('0')
-        if pokemon_num == '':  # Handle case where id is all zeros
-            pokemon_num = '0'
+        # Convert to string and ensure it has leading zeros (e.g., "1" -> "001")
+        pokemon_num = str(pokemon_id).zfill(3)
+        
+        # Debug output
+        print(f"Looking up Pokemon ID: '{pokemon_id}', formatted as '{pokemon_num}'")
         
         # Try to get from pokemon_names dictionary
         if pokemon_num in self.pokemon_names:
-            return self.pokemon_names[pokemon_num]
+            name = self.pokemon_names[pokemon_num]
+            print(f"Found name for {pokemon_num}: {name}")
+            return name
         
-        # Fallback to formatted ID if name not found
-        return f"#{pokemon_id}"
+        # Debug if not found
+        print(f"Name not found for ID {pokemon_num}! Keys in dictionary: {list(self.pokemon_names.keys())[:5]}...")
+        
+        # Fallback to a more descriptive name if not found
+        return f"Pokemon {pokemon_num}"
 
     def scale_image(self, image):
         """Scale image to fit the screen while maintaining aspect ratio"""
@@ -682,9 +768,25 @@ class PokemonQuizGame:
         # Get Pokemon info in the order they were seen
         seen_pokemon_info = []
         for pokemon_id in self.seen_pokemon:
-            name = self.get_pokemon_name(pokemon_id)
+            # Find this pokemon in our loaded pokemon_images list to get its cached name
+            pokemon_name = None
+            for pid, name, _ in self.pokemon_images:
+                if pid == pokemon_id:
+                    pokemon_name = name
+                    break
+            
+            # Fallback if not found (shouldn't happen)
+            if pokemon_name is None:
+                pokemon_name = f"Pokemon {pokemon_id}"
+                
             is_skipped = pokemon_id in self.skipped_pokemon
-            seen_pokemon_info.append((pokemon_id, f"{pokemon_id}. {name}", is_skipped))
+            seen_pokemon_info.append((pokemon_id, pokemon_name, is_skipped))
+        
+        # Debug output for the first few Pokemon names
+        if seen_pokemon_info:
+            for i in range(min(5, len(seen_pokemon_info))):
+                pid, entry, skipped = seen_pokemon_info[i]
+                print(f"Debug - Pokemon {i+1}: ID={pid}, entry={entry}, skipped={skipped}")
         
         # Calculate grid layout - increase item_width for better spacing
         item_height = 30
@@ -717,7 +819,15 @@ class PokemonQuizGame:
             if list_area_y - item_height <= y <= list_area_y + list_area_height:
                 # Use red color for skipped Pokemon
                 text_color = RED if is_skipped else BLACK
-                pokemon_surf = small_font.render(pokemon_entry, True, text_color)
+                
+                # Format as "#ID. Name" for clarity and conciseness
+                display_text = f"#{pokemon_id}. {pokemon_entry}"
+                
+                # Print debug info for the first few items
+                if i < 5:
+                    print(f"Rendering Pokemon {i+1}: {display_text}")
+                
+                pokemon_surf = small_font.render(display_text, True, text_color)
                 screen.blit(pokemon_surf, (x, y))
         
         # Reset the clipping mask
@@ -742,6 +852,16 @@ class PokemonQuizGame:
         clock = pygame.time.Clock()
         running = True
         
+        # Ensure Pokemon names are loaded at startup
+        if not self.pokemon_names:
+            print("Pokemon names dictionary is empty - reloading from CSV...")
+            self.pokemon_names = load_pokemon_names()
+        
+        # Ensure Pokemon images are loaded at startup
+        if not self.pokemon_images:
+            print("Pokemon images list is empty - reloading images...")
+            self.load_pokemon_images()
+        
         while running:
             # Handle events
             running = self.handle_events()
@@ -754,6 +874,10 @@ class PokemonQuizGame:
             
             # Cap the frame rate
             clock.tick(FPS)
+        
+        # Ensure high scores are saved when closing
+        print("Game closing - saving high scores...")
+        self.high_score_manager.save_high_scores()
         
         pygame.quit()
 
