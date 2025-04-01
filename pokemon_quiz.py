@@ -261,6 +261,9 @@ class PokemonQuizGame:
         
         # Load Pokemon images
         self.load_pokemon_images()
+        
+        # Game state variables
+        self.reset_game()
 
     def load_pokemon_images(self):
         """Load all Pokemon images from the img directory"""
