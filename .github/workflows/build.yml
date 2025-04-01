@@ -23,9 +23,13 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
+    - name: Create empty high scores file
+      run: |
+        echo "{\"top_score\": 0, \"recent_scores\": []}" > high_scores.json
+    
     - name: Build executable
       run: |
-        pyinstaller --onefile --windowed --add-data "img;img" --add-data "pokemon_names.csv;." --add-data "high_scores.json;." pokemon_quiz.py
+        pyinstaller --onefile --windowed --add-data "img/*;img/" --add-data "pokemon_names.csv;." --add-data "high_scores.json;." pokemon_quiz.py
     
     - name: Create Release
       id: create_release
