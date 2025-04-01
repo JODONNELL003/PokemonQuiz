@@ -265,6 +265,24 @@ class PokemonQuizGame:
         # Game state variables
         self.reset_game()
 
+    def reset_game(self):
+        """Reset the game state for a new game"""
+        self.seen_pokemon = []
+        self.skipped_pokemon = []
+        self.current_pokemon = None
+        self.time_left = TIMER_DURATION
+        self.score = 0
+        self.current_score = 0
+        self.is_new_high_score = False
+        self.first_interaction_done = False
+        self.state = "start"
+        self.scroll_y = 0
+        self.pokemon_images = []  # Clear loaded images
+        self.fade_alpha = 0
+        self.fade_in = True
+        self.pokemon_scale = 0.9
+        self.scale_increasing = False
+
     def load_pokemon_images(self):
         """Load all Pokemon images from the img directory"""
         image_dir = resource_path("img")
