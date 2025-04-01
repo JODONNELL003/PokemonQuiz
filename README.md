@@ -1,6 +1,55 @@
 # Pokemon Quiz Game
 
-A fun and interactive Pokemon quiz game built with Pygame. Test your Pokemon knowledge by naming as many Pokemon as you can in 60 seconds!
+A fun quiz game to test your Pokemon knowledge! Try to name as many Pokemon as you can in 60 seconds.
+
+## Download and Play
+
+### Windows Users
+1. Go to the [Releases](https://github.com/JODONNELL003/PokemonQuiz/releases) page
+2. Download the latest `PokemonQuiz.exe` from the latest release
+3. Double-click the downloaded file to run the game
+
+### How to Play
+- Press SPACE to cycle through Pokemon
+- Press BACKSPACE to skip Pokemon you don't know
+- Try to name as many Pokemon as you can in 60 seconds
+- Press ESC to quit
+
+## Development Setup
+
+If you want to run the game from source:
+
+1. Clone the repository:
+```bash
+git clone https://github.com/JODONNELL003/PokemonQuiz.git
+cd PokemonQuiz
+```
+
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+3. Run the game:
+```bash
+python pokemon_quiz.py
+```
+
+## Building the Executable
+
+To build the Windows executable:
+
+1. Install PyInstaller:
+```bash
+pip install pyinstaller
+```
+
+2. Run the build command:
+```bash
+pyinstaller pokemon_quiz.spec
+```
+
+The executable will be created in the `dist` folder.
 
 ## Features
 
@@ -29,20 +78,6 @@ A fun and interactive Pokemon quiz game built with Pygame. Test your Pokemon kno
    - `new_pokemon.wav` - Played when showing a new Pokemon
    - `start_game.wav` - Played when starting the game
    - `end_game.wav` - Played when the game ends
-
-## How to Play
-
-1. Run the game:
-   ```bash
-   python pokemon_quiz.py
-   ```
-2. Click the START button or press Enter to begin the quiz
-3. You have 60 seconds to identify as many Pokemon as possible
-4. Press SPACE to cycle to the next Pokemon
-5. When time runs out, the game will show you a list of all Pokemon you saw
-6. Your score will be saved if it's a new high score
-7. Click PLAY AGAIN to start a new game
-8. Press ESC at any time to quit
 
 ## Controls
 
