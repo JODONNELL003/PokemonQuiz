@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -31,23 +34,12 @@ jobs:
       run: |
         pyinstaller --onefile --windowed --add-data "img/*;img/" --add-data "pokemon_names.csv;." --add-data "high_scores.json;." pokemon_quiz.py
     
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      if: github.ref == 'refs/heads/main'
       with:
+        files: ./dist/pokemon_quiz.exe
+        name: Release v${{ github.run_number }}
         tag_name: v${{ github.run_number }}
-        release_name: Release v${{ github.run_number }}
         draft: false
-        prerelease: false
-    
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/pokemon_quiz.exe
-        asset_name: PokemonQuiz.exe
-        asset_content_type: application/x-msdownload 
+        prerelease: false 
