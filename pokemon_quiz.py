@@ -207,6 +207,12 @@ class HighScoreManager:
         self.file_path = file_path
         self.high_scores = self.load_high_scores()
         
+        # ALWAYS ensure top_score is 0 when first initializing the app
+        # This is a backup safeguard to handle any edge cases
+        if getattr(sys, 'frozen', False):  # Running as compiled executable
+            print("Ensuring high scores start at zero for packaged application")
+            self.high_scores["top_score"] = 0
+        
     def load_high_scores(self):
         try:
             # For a fresh installation, always use a clean high scores file
@@ -361,6 +367,14 @@ class PokemonQuizGame:
         
         # High score system
         self.high_score_manager = HighScoreManager()
+        # Force reset high scores to zero at app startup for Windows packaged version
+        # This ensures each installation starts fresh
+        if getattr(sys, 'frozen', False):  # Check if running in a PyInstaller bundle
+            print("Running as packaged application - resetting high scores to zero")
+            self.high_score_manager.high_scores["top_score"] = 0
+            self.high_score_manager.high_scores["recent_scores"] = []
+            self.high_score_manager.save_high_scores()
+            
         self.current_score = 0 # Final score for the round
         self.score = 0         # Running score during the game
         self.is_new_high_score = False
@@ -653,10 +667,19 @@ class PokemonQuizGame:
         # Sync hard mode checkbox state
         self.end_hard_mode_checkbox.checked = self.hard_mode
         
-        # Check if this is a new high score
+        # Check if this is a new high score - make extra sure we load the current value
         top_score = self.high_score_manager.get_top_score()
+        print(f"Current top score: {top_score}, This game score: {self.current_score}")
+        
+        # Double check the top score isn't artificially high
+        if getattr(sys, 'frozen', False) and top_score > 20 and os.path.exists(HIGH_SCORE_FILE):
+            print("Resetting suspiciously high score in packaged app")
+            self.high_score_manager.high_scores["top_score"] = 0
+            top_score = 0
+        
         if self.current_score > top_score:
             self.is_new_high_score = True
+            print(f"New high score achieved: {self.current_score}")
         
         # Save the score
         self.high_score_manager.add_score(self.current_score)

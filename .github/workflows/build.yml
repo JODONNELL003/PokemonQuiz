@@ -27,19 +27,10 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
     
-    - name: Verify empty_high_scores.json content
+    - name: Create clean high scores file
       run: |
-        if (-not (Test-Path "empty_high_scores.json")) {
-          Write-Error "empty_high_scores.json not found"
-          exit 1
-        }
-        Write-Host "Verifying empty_high_scores.json has correct values..."
-        $content = Get-Content "empty_high_scores.json" -Raw | ConvertFrom-Json
-        if ($content.top_score -ne 0) {
-          Write-Host "Fixing top_score in empty_high_scores.json"
-          $content.top_score = 0
-          $content | ConvertTo-Json -Compress | Set-Content "empty_high_scores.json"
-        }
+        Write-Host "Creating clean empty_high_scores.json with score of 0"
+        '{\"top_score\": 0, \"recent_scores\": []}' | Out-File -Encoding utf8 empty_high_scores.json -Force
         Write-Host "Content of empty_high_scores.json:"
         Get-Content "empty_high_scores.json"
     
