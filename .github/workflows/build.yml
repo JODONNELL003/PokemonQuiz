@@ -25,14 +25,22 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install pyinstaller
     
-    - name: Create empty high scores file
+    - name: Check for required files
       run: |
-        echo "{\"top_score\": 0, \"recent_scores\": []}" > high_scores.json
+        if (-not (Test-Path "empty_high_scores.json")) {
+          Write-Error "empty_high_scores.json not found"
+          exit 1
+        }
+        if (-not (Test-Path "pokemon_names.csv")) {
+          Write-Error "pokemon_names.csv not found"
+          exit 1
+        }
     
     - name: Build executable
       run: |
-        pyinstaller --onefile --windowed --add-data "img/*;img/" --add-data "pokemon_names.csv;." --add-data "high_scores.json;." pokemon_quiz.py
+        pyinstaller --onefile --windowed --add-data "img/*;img/" --add-data "pokemon_names.csv;." --add-data "empty_high_scores.json;." pokemon_quiz.py
     
     - name: Release
       uses: softprops/action-gh-release@v1

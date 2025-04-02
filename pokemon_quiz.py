@@ -62,11 +62,36 @@ def get_highscore_path():
             
         scores_path = os.path.join(app_data_dir, "high_scores.json")
         print(f"High scores will be saved to: {scores_path}")
+        
+        # Initialize with empty high scores if the file doesn't exist
+        if not os.path.exists(scores_path):
+            # Path to the template file
+            template_path = resource_path("empty_high_scores.json")
+            if os.path.exists(template_path):
+                print(f"Initializing high scores with template from: {template_path}")
+                try:
+                    # Copy the template
+                    with open(template_path, 'r') as src:
+                        template_data = src.read()
+                    with open(scores_path, 'w') as dest:
+                        dest.write(template_data)
+                    print(f"Successfully initialized high scores file.")
+                except Exception as e:
+                    print(f"Error initializing high scores: {e}")
+            else:
+                print(f"Template file not found at: {template_path}")
+                print("Creating default empty high scores file")
+                try:
+                    with open(scores_path, 'w') as f:
+                        json.dump({"top_score": 0, "recent_scores": []}, f)
+                except Exception as e:
+                    print(f"Error creating default high scores: {e}")
+        
         return scores_path
     except Exception as e:
         print(f"Error creating high scores directory: {e}")
         # Fallback to current directory
-        return "high_scores.json"
+        return resource_path("empty_high_scores.json")
 
 HIGH_SCORE_FILE = get_highscore_path()
 
@@ -152,6 +177,49 @@ class Button:
         mouse_clicked = pygame.mouse.get_pressed()[0]
         return self.rect.collidepoint(mouse_pos) and mouse_clicked
 
+class Checkbox:
+    def __init__(self, x, y, width, height, text, checked=False, font=small_font, 
+                text_color=BLACK, box_color=WHITE, check_color=GREEN):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.box_rect = pygame.Rect(x, y, height, height)  # Square box
+        self.text = text
+        self.checked = checked
+        self.font = font
+        self.text_color = text_color
+        self.box_color = box_color
+        self.check_color = check_color
+        
+    def draw(self, surface):
+        # Draw the checkbox box
+        pygame.draw.rect(surface, self.box_color, self.box_rect, border_radius=3)
+        pygame.draw.rect(surface, BLACK, self.box_rect, width=2, border_radius=3)
+        
+        # Draw the checkmark if checked
+        if self.checked:
+            inner_rect = pygame.Rect(
+                self.box_rect.x + 4, 
+                self.box_rect.y + 4, 
+                self.box_rect.width - 8, 
+                self.box_rect.height - 8
+            )
+            pygame.draw.rect(surface, self.check_color, inner_rect, border_radius=2)
+        
+        # Render text
+        text_surf = self.font.render(self.text, True, self.text_color)
+        text_rect = text_surf.get_rect(midleft=(self.box_rect.right + 10, self.box_rect.centery))
+        surface.blit(text_surf, text_rect)
+        
+    def is_clicked(self):
+        mouse_pos = pygame.mouse.get_pos()
+        mouse_clicked = pygame.mouse.get_pressed()[0]
+        if self.rect.collidepoint(mouse_pos) and mouse_clicked:
+            return True
+        return False
+        
+    def toggle(self):
+        self.checked = not self.checked
+        return self.checked
+
 class HighScoreManager:
     def __init__(self, file_path=HIGH_SCORE_FILE):
         self.file_path = file_path
@@ -165,8 +233,24 @@ class HighScoreManager:
             else:
                 # Initial empty high scores object
                 initial_scores = {"top_score": 0, "recent_scores": []}
+                
+                # Try to load from template if available
+                template_path = resource_path("empty_high_scores.json")
+                if os.path.exists(template_path) and template_path != self.file_path:
+                    try:
+                        print(f"Loading high scores template from: {template_path}")
+                        with open(template_path, 'r') as f:
+                            initial_scores = json.load(f)
+                    except Exception as e:
+                        print(f"Error loading template, using default: {e}")
+                
                 # Save it immediately to create the file
                 try:
+                    # Create parent directory if it doesn't exist
+                    parent_dir = os.path.dirname(self.file_path)
+                    if parent_dir and not os.path.exists(parent_dir):
+                        os.makedirs(parent_dir)
+                        
                     with open(self.file_path, 'w') as f:
                         json.dump(initial_scores, f)
                     print(f"Created new high scores file at {self.file_path}")
@@ -274,6 +358,9 @@ class PokemonQuizGame:
         self.is_new_high_score = False
         self.first_interaction_done = False # Flag for initial state
         
+        # Hard mode toggle
+        self.hard_mode = False
+        
         # Animated background
         self.gradient = AnimatedGradient(WINDOW_WIDTH, WINDOW_HEIGHT, [LIGHT_PINK, DARK_PINK])
         
@@ -291,7 +378,7 @@ class PokemonQuizGame:
         # Buttons
         self.start_button = Button(
             WINDOW_WIDTH // 2 - 150, 
-            WINDOW_HEIGHT // 2 + 50, 
+            WINDOW_HEIGHT // 5 + 150, 
             300, 80, "START", 
             GREEN, (100, 255, 100)
         )
@@ -315,6 +402,22 @@ class PokemonQuizGame:
             WINDOW_HEIGHT - 180, 
             60, 40, "▼", 
             GRAY, (150, 150, 150)
+        )
+        
+        # Hard mode checkbox
+        self.hard_mode_checkbox = Checkbox(
+            WINDOW_WIDTH // 2 - 80,
+            WINDOW_HEIGHT // 5 + 250,
+            240, 30, "Hard Mode",
+            checked=False
+        )
+        
+        # End screen hard mode checkbox
+        self.end_hard_mode_checkbox = Checkbox(
+            WINDOW_WIDTH // 2 - 80,
+            WINDOW_HEIGHT - 130,
+            240, 30, "Hard Mode",
+            checked=False
         )
         
         # Load Pokemon images
@@ -344,6 +447,9 @@ class PokemonQuizGame:
         self.fade_in = True
         self.pokemon_scale = 0.9
         self.scale_increasing = False
+        
+        # Make end screen checkbox match start screen checkbox
+        self.end_hard_mode_checkbox.checked = self.hard_mode_checkbox.checked
 
     def load_pokemon_images(self):
         """Load all Pokemon images from the img directory"""
@@ -464,6 +570,9 @@ class PokemonQuizGame:
         self.score = 0 # Start score at 0
         self.first_interaction_done = False # Reset flag
         
+        # Set hard mode based on checkbox state
+        self.hard_mode = self.hard_mode_checkbox.checked
+        
         # Add the first pokemon to seen_pokemon
         if self.current_pokemon:
             pokemon_id = self.current_pokemon[0]
@@ -533,6 +642,9 @@ class PokemonQuizGame:
         # Reset scroll position
         self.scroll_y = 0
         
+        # Sync hard mode checkbox state
+        self.end_hard_mode_checkbox.checked = self.hard_mode
+        
         # Check if this is a new high score
         top_score = self.high_score_manager.get_top_score()
         if self.current_score > top_score:
@@ -555,24 +667,27 @@ class PokemonQuizGame:
             if self.time_left <= 0:
                 self.end_game()
         
-        # Update animations
-        if self.fade_in:
-            self.fade_alpha = min(255, self.fade_alpha + 5)
-            if self.fade_alpha >= 255:
-                self.fade_in = False
-        else:
-            self.fade_alpha = max(150, self.fade_alpha - 5)
-            if self.fade_alpha <= 150:
-                self.fade_in = True
-        
-        if self.scale_increasing:
-            self.pokemon_scale = min(1.0, self.pokemon_scale + 0.005)
-            if self.pokemon_scale >= 1.0:
-                self.scale_increasing = False
-        else:
-            self.pokemon_scale = max(0.9, self.pokemon_scale - 0.005)
-            if self.pokemon_scale <= 0.9:
-                self.scale_increasing = True
+        # Update animations only if in hard mode or not in game state
+        if self.hard_mode or self.state != "game":
+            # Update fade animation
+            if self.fade_in:
+                self.fade_alpha = min(255, self.fade_alpha + 5)
+                if self.fade_alpha >= 255:
+                    self.fade_in = False
+            else:
+                self.fade_alpha = max(150, self.fade_alpha - 5)
+                if self.fade_alpha <= 150:
+                    self.fade_in = True
+            
+            # Update scale animation
+            if self.scale_increasing:
+                self.pokemon_scale = min(1.0, self.pokemon_scale + 0.005)
+                if self.pokemon_scale >= 1.0:
+                    self.scale_increasing = False
+            else:
+                self.pokemon_scale = max(0.9, self.pokemon_scale - 0.005)
+                if self.pokemon_scale <= 0.9:
+                    self.scale_increasing = True
 
     def handle_events(self):
         """Handle user input events"""
@@ -606,12 +721,19 @@ class PokemonQuizGame:
             
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 # Check button clicks
-                if self.state == "start" and self.start_button.is_clicked():
-                    self.start_game()
+                if self.state == "start":
+                    if self.start_button.is_clicked():
+                        self.start_game()
+                    elif self.hard_mode_checkbox.is_clicked():
+                        self.hard_mode_checkbox.toggle()
                 
                 elif self.state == "end":
                     if self.restart_button.is_clicked():
+                        # Update hard mode from end screen
+                        self.hard_mode_checkbox.checked = self.end_hard_mode_checkbox.checked
                         self.start_game()
+                    elif self.end_hard_mode_checkbox.is_clicked():
+                        self.end_hard_mode_checkbox.toggle()
                     elif self.scroll_up_button.is_clicked():
                         self.scroll_y = max(0, self.scroll_y - self.scroll_speed)
                     elif self.scroll_down_button.is_clicked():
@@ -641,21 +763,24 @@ class PokemonQuizGame:
 
     def draw_start_screen(self):
         """Draw the start screen"""
-        # Draw title
+        # Draw title - move down slightly from 1/4 to 1/5
         title_surf = title_font.render("Pokemon Quiz Game", True, BLACK)
-        title_rect = title_surf.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 4))
+        title_rect = title_surf.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 5))
         screen.blit(title_surf, title_rect)
         
-        # Draw high score
+        # Draw high score - reduce gap after title
         high_score = self.high_score_manager.get_top_score()
         high_score_surf = medium_font.render(f"High Score: {high_score}", True, BLACK)
-        high_score_rect = high_score_surf.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 3))
+        high_score_rect = high_score_surf.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 5 + 70))
         screen.blit(high_score_surf, high_score_rect)
         
-        # Draw start button
+        # Draw start button - move up
         self.start_button.draw(screen)
         
-        # Draw instructions
+        # Draw hard mode checkbox
+        self.hard_mode_checkbox.draw(screen)
+        
+        # Draw instructions - move up
         instructions = [
             "How to play:",
             "1. Press SPACE to cycle through Pokemon",
@@ -666,7 +791,7 @@ class PokemonQuizGame:
         
         for i, text in enumerate(instructions):
             instr_surf = small_font.render(text, True, BLACK)
-            instr_rect = instr_surf.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT * 3/4 + i * 40))
+            instr_rect = instr_surf.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT * 2/3 + i * 40))
             screen.blit(instr_surf, instr_rect)
 
     def draw_game_screen(self):
@@ -688,15 +813,24 @@ class PokemonQuizGame:
         high_score_rect = high_score_surf.get_rect(topleft=(20, 20))
         screen.blit(high_score_surf, high_score_rect)
         
+        # Draw hard mode indicator if enabled
+        if self.hard_mode:
+            hard_mode_surf = small_font.render("Hard Mode", True, RED)
+            hard_mode_rect = hard_mode_surf.get_rect(topright=(WINDOW_WIDTH - 20, 20))
+            screen.blit(hard_mode_surf, hard_mode_rect)
+        
         # Draw current Pokemon with animation
         if self.current_pokemon:
             pokemon_id, pokemon_name, pokemon_image = self.current_pokemon
             
-            # Apply scaling animation
-            current_width, current_height = pokemon_image.get_size()
-            scaled_width = int(current_width * self.pokemon_scale)
-            scaled_height = int(current_height * self.pokemon_scale)
-            animated_image = pygame.transform.scale(pokemon_image, (scaled_width, scaled_height))
+            # Apply scaling animation if hard mode is enabled, otherwise just display at 100% scale
+            if self.hard_mode:
+                current_width, current_height = pokemon_image.get_size()
+                scaled_width = int(current_width * self.pokemon_scale)
+                scaled_height = int(current_height * self.pokemon_scale)
+                animated_image = pygame.transform.scale(pokemon_image, (scaled_width, scaled_height))
+            else:
+                animated_image = pokemon_image
             
             # Center the image
             image_rect = animated_image.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2))
@@ -704,7 +838,7 @@ class PokemonQuizGame:
             
             # Draw semi-transparent "SPACE for next" text
             hint_surf = small_font.render("Press SPACE for next Pokemon | BACKSPACE to skip", True, BLACK)
-            hint_surf.set_alpha(self.fade_alpha)
+            hint_surf.set_alpha(self.fade_alpha if self.hard_mode else 200)  # Constant alpha if not hard mode
             hint_rect = hint_surf.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT - 100))
             screen.blit(hint_surf, hint_rect)
 
@@ -741,6 +875,9 @@ class PokemonQuizGame:
         high_score_surf = medium_font.render(high_score_text, True, high_score_color)
         high_score_rect = high_score_surf.get_rect(center=(WINDOW_WIDTH // 2, 220))
         screen.blit(high_score_surf, high_score_rect)
+        
+        # Draw hard mode checkbox (moved above restart button for visibility)
+        self.end_hard_mode_checkbox.draw(screen)
         
         # Draw restart button
         self.restart_button.draw(screen)
