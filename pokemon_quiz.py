@@ -58,39 +58,21 @@ def get_highscore_path():
             
         # Create the directory if it doesn't exist
         if not os.path.exists(app_data_dir):
-            os.makedirs(app_data_dir)
+            try:
+                os.makedirs(app_data_dir)
+                print(f"Created directory: {app_data_dir}")
+            except Exception as e:
+                print(f"Error creating app data directory: {e}")
+                # Fall back to using the template directly
+                return resource_path("empty_high_scores.json")
             
         scores_path = os.path.join(app_data_dir, "high_scores.json")
         print(f"High scores will be saved to: {scores_path}")
         
-        # Initialize with empty high scores if the file doesn't exist
-        if not os.path.exists(scores_path):
-            # Path to the template file
-            template_path = resource_path("empty_high_scores.json")
-            if os.path.exists(template_path):
-                print(f"Initializing high scores with template from: {template_path}")
-                try:
-                    # Copy the template
-                    with open(template_path, 'r') as src:
-                        template_data = src.read()
-                    with open(scores_path, 'w') as dest:
-                        dest.write(template_data)
-                    print(f"Successfully initialized high scores file.")
-                except Exception as e:
-                    print(f"Error initializing high scores: {e}")
-            else:
-                print(f"Template file not found at: {template_path}")
-                print("Creating default empty high scores file")
-                try:
-                    with open(scores_path, 'w') as f:
-                        json.dump({"top_score": 0, "recent_scores": []}, f)
-                except Exception as e:
-                    print(f"Error creating default high scores: {e}")
-        
         return scores_path
     except Exception as e:
-        print(f"Error creating high scores directory: {e}")
-        # Fallback to current directory
+        print(f"Error determining high scores path: {e}")
+        # Fallback to the template file
         return resource_path("empty_high_scores.json")
 
 HIGH_SCORE_FILE = get_highscore_path()
@@ -227,36 +209,62 @@ class HighScoreManager:
         
     def load_high_scores(self):
         try:
+            # For a fresh installation, always use a clean high scores file
             if os.path.exists(self.file_path):
-                with open(self.file_path, 'r') as f:
-                    return json.load(f)
-            else:
-                # Initial empty high scores object
-                initial_scores = {"top_score": 0, "recent_scores": []}
-                
-                # Try to load from template if available
-                template_path = resource_path("empty_high_scores.json")
-                if os.path.exists(template_path) and template_path != self.file_path:
-                    try:
-                        print(f"Loading high scores template from: {template_path}")
-                        with open(template_path, 'r') as f:
-                            initial_scores = json.load(f)
-                    except Exception as e:
-                        print(f"Error loading template, using default: {e}")
-                
-                # Save it immediately to create the file
                 try:
-                    # Create parent directory if it doesn't exist
-                    parent_dir = os.path.dirname(self.file_path)
-                    if parent_dir and not os.path.exists(parent_dir):
-                        os.makedirs(parent_dir)
-                        
-                    with open(self.file_path, 'w') as f:
-                        json.dump(initial_scores, f)
-                    print(f"Created new high scores file at {self.file_path}")
+                    with open(self.file_path, 'r') as f:
+                        loaded_scores = json.load(f)
+                    
+                    # Validate the structure and values (add this validation for safety)
+                    if 'top_score' not in loaded_scores or not isinstance(loaded_scores['top_score'], int):
+                        print(f"Invalid top_score in {self.file_path}, resetting to 0")
+                        loaded_scores['top_score'] = 0
+                    
+                    if 'recent_scores' not in loaded_scores or not isinstance(loaded_scores['recent_scores'], list):
+                        print(f"Invalid recent_scores in {self.file_path}, resetting to empty list")
+                        loaded_scores['recent_scores'] = []
+                    
+                    return loaded_scores
+                except (json.JSONDecodeError, ValueError) as e:
+                    print(f"Error parsing high scores file: {e}, will use default")
+                    # Fall through to create a new file
+            
+            # File doesn't exist or couldn't be parsed, create a new one
+            # Initial empty high scores object
+            initial_scores = {"top_score": 0, "recent_scores": []}
+            
+            # Try to load from template if available
+            template_path = resource_path("empty_high_scores.json")
+            if os.path.exists(template_path) and template_path != self.file_path:
+                try:
+                    print(f"Loading high scores template from: {template_path}")
+                    with open(template_path, 'r') as f:
+                        template_scores = json.load(f)
+                    
+                    # Ensure template has correct values
+                    if 'top_score' in template_scores and isinstance(template_scores['top_score'], int):
+                        initial_scores['top_score'] = 0  # Always start with 0 for top score
+                    
+                    if 'recent_scores' in template_scores and isinstance(template_scores['recent_scores'], list):
+                        initial_scores['recent_scores'] = []  # Always start with empty list
+                    
+                    print(f"Using validated template with score reset to 0")
                 except Exception as e:
-                    print(f"Failed to create high scores file: {e}")
-                return initial_scores
+                    print(f"Error loading template, using default: {e}")
+            
+            # Save it immediately to create the file
+            try:
+                # Create parent directory if it doesn't exist
+                parent_dir = os.path.dirname(self.file_path)
+                if parent_dir and not os.path.exists(parent_dir):
+                    os.makedirs(parent_dir)
+                    
+                with open(self.file_path, 'w') as f:
+                    json.dump(initial_scores, f)
+                print(f"Created new high scores file at {self.file_path}")
+            except Exception as e:
+                print(f"Failed to create high scores file: {e}")
+            return initial_scores
         except Exception as e:
             print(f"Error loading high scores: {e}")
             return {"top_score": 0, "recent_scores": []}

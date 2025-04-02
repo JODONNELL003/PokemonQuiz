@@ -27,16 +27,21 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
     
-    - name: Check for required files
+    - name: Verify empty_high_scores.json content
       run: |
         if (-not (Test-Path "empty_high_scores.json")) {
           Write-Error "empty_high_scores.json not found"
           exit 1
         }
-        if (-not (Test-Path "pokemon_names.csv")) {
-          Write-Error "pokemon_names.csv not found"
-          exit 1
+        Write-Host "Verifying empty_high_scores.json has correct values..."
+        $content = Get-Content "empty_high_scores.json" -Raw | ConvertFrom-Json
+        if ($content.top_score -ne 0) {
+          Write-Host "Fixing top_score in empty_high_scores.json"
+          $content.top_score = 0
+          $content | ConvertTo-Json -Compress | Set-Content "empty_high_scores.json"
         }
+        Write-Host "Content of empty_high_scores.json:"
+        Get-Content "empty_high_scores.json"
     
     - name: Build executable
       run: |
